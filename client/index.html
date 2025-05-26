@@ -1,1 +1,53 @@
-
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="description" content="Play Aviator, the exciting crash gambling game with real-time multipliers and instant cashouts" />
+    <title>Aviator - Crash Gambling Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+      :root {
+        --font-sans: 'Inter', sans-serif;
+        --font-display: 'Orbitron', sans-serif;
+      }
+      
+      .font-display {
+        font-family: var(--font-display);
+      }
+      
+      .font-sans {
+        font-family: var(--font-sans);
+      }
+      
+      .game-container {
+        position: relative;
+        overflow: hidden;
+        background: radial-gradient(ellipse at center, #2563EB 0%, #1E3A8A 100%);
+      }
+      
+      @media (max-width: 768px) {
+        .desktop-nav {
+          display: none;
+        }
+        .mobile-nav {
+          display: flex;
+        }
+      }
+      
+      @media (min-width: 769px) {
+        .desktop-nav {
+          display: flex;
+        }
+        .mobile-nav {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+  </html>
