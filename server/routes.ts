@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { 
+import {
   loginSchema, registerSchema, resetPasswordSchema, phoneSchema,
   betAmountSchema, cashoutSchema, insertGameSchema
 } from "@shared/schema";
@@ -14,7 +14,7 @@ import MemoryStore from "memorystore";
 
 // Type for game state broadcasted to clients
 type GameState = {
-  status: "waiting" | "active" | "crashed";
+  status: "waiting" | "active" | "crashed" | "done";
   countdown?: number;
   multiplier?: number;
   crashPoint?: number;
@@ -34,10 +34,10 @@ let currentGame: {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  
+
   // Setup WebSocket server for real-time game updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  
+
   // Setup session middleware
   const SessionStore = MemoryStore(session);
   app.use(session({
@@ -49,22 +49,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       checkPeriod: 86400000 // prune expired entries every 24h
     })
   }));
-  
+
   // Utility to handle async routes
-  const asyncHandler = (fn: (req: Request, res: Response) => Promise<any>) => 
+  const asyncHandler = (fn: (req: Request, res: Response) => Promise<any>) =>
     (req: Request, res: Response) => {
       Promise.resolve(fn(req, res)).catch(err => {
         console.error("Error in route handler:", err);
-        
+
         // Handle validation errors
         if (err instanceof ZodError) {
           const validationError = fromZodError(err);
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: "Validation error",
             errors: validationError.details || validationError.message
           });
         }
-        
+
         res.status(500).json({ message: "Internal server error" });
       });
     };
@@ -81,9 +81,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const broadcastGameState = () => {
     wss.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ 
-          type: 'gameState', 
-          data: currentGame.state 
+        client.send(JSON.stringify({
+          type: 'gameState',
+          data: currentGame.state
         }));
       }
     });
@@ -93,11 +93,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const startGameCountdown = () => {
     currentGame.state = { status: "waiting", countdown: 10 };
     broadcastGameState();
-    
+
     let countdown = 10;
     currentGame.intervalId = setInterval(() => {
       countdown--;
-      
+
       if (countdown <= 0) {
         clearInterval(currentGame.intervalId);
         startGame();
@@ -112,13 +112,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const startGame = async () => {
     // Generate crash point (between 1.1 and 10.0)
     const crashPoint = 1.1 + Math.random() * 8.9;
-    
+
     // Create new game in database
-    const game = await storage.createGame({ 
+    const game = await storage.createGame({
       crashPoint
     });
-    
+
     currentGame.gameId = game.id;
     currentGame.startTime = Date.now();
-    currentGame.state = { 
-      status: "done" };
+    currentGame.state = {
+      status: "done"
+    };
+  };
+
+  return httpServer;
+  }
+  
