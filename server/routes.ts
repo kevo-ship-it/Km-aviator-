@@ -36,12 +36,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // Setup WebSocket server for real-time game updates
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
   // Setup session middleware
   const SessionStore = MemoryStore(session);
   app.use(session({
-    secret: crypto.randomBytes(32).toString('hex'),
+    secret: crypto.randomBytes(32).toString("hex"),
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 1 day
@@ -50,13 +50,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   }));
 
+  app.use(express.json()); // Needed to parse JSON from frontend
+
   // Utility to handle async routes
   const asyncHandler = (fn: (req: Request, res: Response) => Promise<any>) =>
     (req: Request, res: Response) => {
       Promise.resolve(fn(req, res)).catch(err => {
         console.error("Error in route handler:", err);
-
-        // Handle validation errors
         if (err instanceof ZodError) {
           const validationError = fromZodError(err);
           return res.status(400).json({
@@ -64,7 +64,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             errors: validationError.details || validationError.message
           });
         }
-
         res.status(500).json({ message: "Internal server error" });
       });
     };
@@ -77,19 +76,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Broadcast game state to all connected clients
+  // =====================
+  // ✅ Auth Routes
+  // =====================
+
+  // Register
+  app.post("/register", asyncHandler(async (req: Request, res: Response) => {
+    const { phone, password } = registerSchema.parse(req.body);
+    const existing = await storage.getUserByPhone(phone);
+    if (existing) return res.status(400).json({ message: "Phone number already registered" });
+
+    const user = await storage.createUser({ phone, password });
+    req.session.userId = user.id;
+    res.json({ status: "success", user: { id: user.id, phone: user.phone } });
+  }));
+
+  // Login
+  app.post("/login", asyncHandler(async (req: Request, res: Response) => {
+    const { phone, password } = loginSchema.parse(req.body);
+    const user = await storage.getUserByPhone(phone);
+    if (!user || user.password !== password)
+      return res.status(401).json({ message: "Invalid credentials" });
+
+    req.session.userId = user.id;
+    res.json({ status: "success", user: { id: user.id, phone: user.phone } });
+  }));
+
+  // Reset Password
+  app.post("/reset-password", asyncHandler(async (req: Request, res: Response) => {
+    const { phone, newPassword } = resetPasswordSchema.parse(req.body);
+    const user = await storage.getUserByPhone(phone);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await storage.updateUserPassword(user.id, newPassword);
+    res.json({ status: "success", message: "Password updated" });
+  }));
+
+  // =====================
+  // 🔁 Game Logic
+  // =====================
+
   const broadcastGameState = () => {
     wss.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify({
-          type: 'gameState',
+          type: "gameState",
           data: currentGame.state
         }));
       }
     });
   };
 
-  // Start game countdown
   const startGameCountdown = () => {
     currentGame.state = { status: "waiting", countdown: 10 };
     broadcastGameState();
@@ -108,23 +145,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }, 1000);
   };
 
-  // Start new game
   const startGame = async () => {
-    // Generate crash point (between 1.1 and 10.0)
     const crashPoint = 1.1 + Math.random() * 8.9;
 
-    // Create new game in database
-    const game = await storage.createGame({
-      crashPoint
-    });
-
+    const game = await storage.createGame({ crashPoint });
     currentGame.gameId = game.id;
     currentGame.startTime = Date.now();
-    currentGame.state = {
-      status: "done"
-    };
+    currentGame.state = { status: "done" };
+    broadcastGameState();
   };
 
   return httpServer;
-  }
-  
+    }
+    
