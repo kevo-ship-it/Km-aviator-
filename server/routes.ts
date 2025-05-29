@@ -121,4 +121,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
     currentGame.gameId = game.id;
     currentGame.startTime = Date.now();
     currentGame.state = { 
-      status: "
+      status: "done"
