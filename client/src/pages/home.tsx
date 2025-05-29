@@ -1,65 +1,38 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { useGame } from "@/hooks/use-game";
-import AuthModal from "@/components/auth-modal";
 import UserHeader from "@/components/user-header";
 import GameArea from "@/components/game-area";
 import BettingControls from "@/components/betting-controls";
 import GameTabs from "@/components/game-tabs";
 import MobileNavigation from "@/components/mobile-navigation";
+import AuthModal from "@/components/auth-modal";
 
 export default function Home() {
-  const { user } = useAuth();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authView, setAuthView] = useState<"login" | "register" | "forgot">("login");
-  
-  const openLoginModal = () => {
-    setAuthView("login");
-    setAuthModalOpen(true);
-  };
-  
-  const openRegisterModal = () => {
-    setAuthView("register");
-    setAuthModalOpen(true);
-  };
-  
-  const closeAuthModal = () => {
-    setAuthModalOpen(false);
-  };
-  
+  const [authModal, setAuthModal] = useState({ isOpen: false, view: "login" as "login" | "register" | "forgot" });
+
+  const openLoginModal = () => setAuthModal({ isOpen: true, view: "login" });
+  const openRegisterModal = () => setAuthModal({ isOpen: true, view: "register" });
+  const closeAuthModal = () => setAuthModal({ ...authModal, isOpen: false });
+
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-dark text-neutral-light">
-      {/* Header */}
+    <div className="min-h-screen bg-neutral">
       <UserHeader 
-        openLoginModal={openLoginModal} 
-        openRegisterModal={openRegisterModal} 
+        openLoginModal={openLoginModal}
+        openRegisterModal={openRegisterModal}
       />
       
-      {/* Main Content Area */}
-      <main className="flex-grow flex flex-col md:flex-row">
-        {/* Game Area (70% on desktop, 100% on mobile) */}
-        <div className="w-full md:w-2/3 p-4">
-          <GameArea />
-          <BettingControls 
-            openLoginModal={openLoginModal} 
-          />
-        </div>
-        
-        {/* Sidebar/Info Area (30% on desktop, bottom on mobile) */}
-        <div className="w-full md:w-1/3 p-4">
-          <GameTabs openLoginModal={openLoginModal} />
-        </div>
+      <main className="max-w-7xl mx-auto p-4">
+        <GameArea />
+        <BettingControls openLoginModal={openLoginModal} />
+        <GameTabs openLoginModal={openLoginModal} />
       </main>
       
-      {/* Mobile Navigation */}
       <MobileNavigation />
       
-      {/* Auth Modal */}
-      <AuthModal 
-        isOpen={authModalOpen}
+      <AuthModal
+        isOpen={authModal.isOpen}
         onClose={closeAuthModal}
-        view={authView}
-        onChangeView={setAuthView}
+        view={authModal.view}
+        onChangeView={(view) => setAuthModal({ ...authModal, view })}
       />
     </div>
   );
