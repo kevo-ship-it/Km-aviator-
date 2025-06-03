@@ -57,33 +57,6 @@ const sendError = (res: Response, statusCode: number, error: string, message: st
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // Enhanced JSON parsing middleware
-  app.use((req, res, next) => {
-    // Override express.json() parsing for better error handling
-    if (req.is('application/json')) {
-      let body = '';
-      req.setEncoding('utf8');
-      req.on('data', chunk => {
-        body += chunk;
-      });
-      req.on('end', () => {
-        try {
-          if (body.trim() === '') {
-            req.body = {};
-          } else {
-            req.body = JSON.parse(body);
-          }
-          next();
-        } catch (error) {
-          console.error('JSON Parse Error:', error);
-          return sendError(res, 400, 'Invalid JSON format', 'Request body contains invalid JSON');
-        }
-      });
-    } else {
-      next();
-    }
-  });
-
   // Setup WebSocket server
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
@@ -260,16 +233,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Global error handler
-  app.use((error: any, req: Request, res: Response, next: Function) => {
-    console.error('Unhandled Error:', error);
-    
-    if (res.headersSent) {
-      return next(error);
-    }
-    
-    sendError(res, 500, 'Internal Server Error', 'An unexpected error occurred');
-  });
-
   return httpServer;
-  }
+             }
