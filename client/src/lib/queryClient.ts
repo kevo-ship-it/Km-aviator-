@@ -2,41 +2,44 @@ import { QueryClient } from "@tanstack/react-query";
 
 export async function apiRequest(method: string, url: string, data?: any) {
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: data ? JSON.stringify(data) : undefined,
     });
     
-    // Get response text first to handle empty responses
-    const responseText = await res.text();
+    // Get response as text first to handle all cases
+    const responseText = await response.text();
     
+    // Handle completely empty responses
     if (!responseText || responseText.trim() === '') {
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      return { success: true };
+      return { success: true, data: null };
     }
     
-    // Parse JSON safely
-    let responseData;
+    // Parse JSON with error handling
+    let parsedData;
     try {
-      responseData = JSON.parse(responseText);
-    } catch (jsonError) {
-      console.error('JSON parsing failed. Response:', responseText);
-      throw new Error('Server returned invalid JSON format');
+      parsedData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', responseText);
+      throw new Error('Server returned invalid JSON');
     }
     
-    if (!res.ok) {
-      throw new Error(responseData.message || responseData.error || "Request failed");
+    // Handle error responses
+    if (!response.ok) {
+      const errorMessage = parsedData?.message || parsedData?.error || `Request failed with status ${response.status}`;
+      throw new Error(errorMessage);
     }
     
-    return responseData;
+    return parsedData;
     
   } catch (error) {
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Network error. Please check your connection.');
+      throw new Error('Network connection failed');
     }
     throw error;
   }
@@ -47,37 +50,45 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: async ({ queryKey }) => {
         try {
-          const res = await fetch(queryKey[0] as string, {
+          const url = queryKey[0] as string;
+          const response = await fetch(url, {
             credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
           });
           
-          // Get response text first
-          const responseText = await res.text();
+          // Get response as text first
+          const responseText = await response.text();
           
+          // Handle empty responses
           if (!responseText || responseText.trim() === '') {
-            if (!res.ok) {
-              throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            return { success: true };
+            return { success: true, data: null };
           }
           
           // Parse JSON safely
+          let data;
           try {
-            const data = JSON.parse(responseText);
-            
-            if (!res.ok) {
-              throw new Error(data.message || data.error || "Request failed");
-            }
-            
-            return data;
-          } catch (jsonError) {
-            console.error('JSON parsing failed. Response:', responseText);
-            throw new Error('Server returned invalid JSON format');
+            data = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error('Query JSON parse error:', responseText);
+            throw new Error('Invalid server response');
           }
+          
+          // Handle error responses
+          if (!response.ok) {
+            const errorMessage = data?.message || data?.error || `Request failed`;
+            throw new Error(errorMessage);
+          }
+          
+          return data;
           
         } catch (error) {
           if (error instanceof TypeError && error.message.includes('fetch')) {
-            throw new Error('Network error. Please check your connection.');
+            throw new Error('Network connection failed');
           }
           throw error;
         }
