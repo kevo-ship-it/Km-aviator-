@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import {
-  loginSchema, registerSchema, resetPasswordSchema, phoneSchema,
-  betAmountSchema, cashoutSchema, insertGameSchema
+  loginSchema, registerSchema, resetPasswordSchema, phoneSchema,
+  betAmountSchema, cashoutSchema, insertGameSchema
 } from "@shared/schema";
 import { ZodError } from "zod";
 import crypto from "crypto";
@@ -14,167 +14,262 @@ import MemoryStore from "memorystore";
 
 // Type for game state broadcasted to clients
 type GameState = {
-  status: "waiting" | "active" | "crashed" | "done";
-  countdown?: number;
-  multiplier?: number;
-  crashPoint?: number;
+  status: "waiting" | "active" | "crashed" | "done";
+  countdown?: number;
+  multiplier?: number;
+  crashPoint?: number;
 };
 
 // Current game state
 let currentGame: {
-  state: GameState;
-  gameId?: number;
-  activeBets: Map<number, { userId: number; amount: number; autoCashout: number | null }>;
-  startTime?: number;
-  intervalId?: NodeJS.Timeout;
+  state: GameState;
+  gameId?: number;
+  activeBets: Map<number, { userId: number; amount: number; autoCashout: number | null }>;
+  startTime?: number;
+  intervalId?: NodeJS.Timeout;
 } = {
-  state: { status: "waiting", countdown: 10 },
-  activeBets: new Map()
+  state: { status: "waiting", countdown: 10 },
+  activeBets: new Map()
+};
+
+// Enhanced response helper functions
+const sendSuccess = (res: Response, data: any, message = 'Success') => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.status(200).json({
+    success: true,
+    message,
+    data,
+    timestamp: new Date().toISOString()
+  });
+};
+
+const sendError = (res: Response, statusCode: number, error: string, message: string, details?: any) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.status(statusCode).json({
+    success: false,
+    error,
+    message,
+    timestamp: new Date().toISOString(),
+    ...(details && { details })
+  });
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const httpServer = createServer(app);
+  const httpServer = createServer(app);
 
-  // Setup WebSocket server
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  // Enhanced JSON parsing middleware
+  app.use((req, res, next) => {
+    // Override express.json() parsing for better error handling
+    if (req.is('application/json')) {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', chunk => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        try {
+          if (body.trim() === '') {
+            req.body = {};
+          } else {
+            req.body = JSON.parse(body);
+          }
+          next();
+        } catch (error) {
+          console.error('JSON Parse Error:', error);
+          return sendError(res, 400, 'Invalid JSON format', 'Request body contains invalid JSON');
+        }
+      });
+    } else {
+      next();
+    }
+  });
 
-  // Setup session middleware
-  const SessionStore = MemoryStore(session);
-  app.use(session({
-    secret: crypto.randomBytes(32).toString("hex"),
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 1 day
-    store: new SessionStore({
-      checkPeriod: 86400000
-    })
-  }));
+  // Setup WebSocket server
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
-  // Helper to catch async errors
-  const asyncHandler = (fn: (req: Request, res: Response) => Promise<any>) =>
-    (req: Request, res: Response) => {
-      Promise.resolve(fn(req, res)).catch(err => {
-        console.error("Error in route handler:", err);
-        if (err instanceof ZodError) {
-          const validationError = fromZodError(err);
-          return res.status(400).json({
-            message: "Validation error",
-            errors: validationError.details || validationError.message
-          });
-        }
-        res.status(500).json({ message: "Internal server error" });
-      });
-    };
+  // Setup session middleware
+  const SessionStore = MemoryStore(session);
+  app.use(session({
+    secret: crypto.randomBytes(32).toString("hex"),
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }, // 1 day
+    store: new SessionStore({
+      checkPeriod: 86400000
+    })
+  }));
 
-  // Auth middleware
-  const requireAuth = (req: Request, res: Response, next: Function) => {
-    if (!req.session.userId) {
-      return res.status(401).json({ message: "Authentication required" });
-    }
-    next();
-  };
+  // Helper to catch async errors with enhanced error handling
+  const asyncHandler = (fn: (req: Request, res: Response) => Promise<any>) =>
+    (req: Request, res: Response) => {
+      Promise.resolve(fn(req, res)).catch(err => {
+        console.error("Error in route handler:", err);
+        if (err instanceof ZodError) {
+          const validationError = fromZodError(err);
+          return sendError(res, 400, 'Validation error', 'Invalid request data', {
+            errors: validationError.details || validationError.message
+          });
+        }
+        sendError(res, 500, 'Internal server error', 'An unexpected error occurred');
+      });
+    };
 
-  // Broadcast to all clients
-  const broadcastGameState = () => {
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({
-          type: "gameState",
-          data: currentGame.state
-        }));
-      }
-    });
-  };
+  // Auth middleware with enhanced error handling
+  const requireAuth = (req: Request, res: Response, next: Function) => {
+    if (!req.session.userId) {
+      return sendError(res, 401, 'Authentication required', 'Please login to continue');
+    }
+    next();
+  };
 
-  // Start game countdown
-  const startGameCountdown = () => {
-    currentGame.state = { status: "waiting", countdown: 10 };
-    broadcastGameState();
+  // Broadcast to all clients with error handling
+  const broadcastGameState = () => {
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(JSON.stringify({
+            type: "gameState",
+            data: currentGame.state,
+            timestamp: new Date().toISOString()
+          }));
+        } catch (error) {
+          console.error('Error broadcasting game state:', error);
+        }
+      }
+    });
+  };
 
-    let countdown = 10;
-    currentGame.intervalId = setInterval(() => {
-      countdown--;
+  // Start game countdown
+  const startGameCountdown = () => {
+    currentGame.state = { status: "waiting", countdown: 10 };
+    broadcastGameState();
 
-      if (countdown <= 0) {
-        clearInterval(currentGame.intervalId);
-        startGame();
-      } else {
-        currentGame.state.countdown = countdown;
-        broadcastGameState();
-      }
-    }, 1000);
-  };
+    let countdown = 10;
+    currentGame.intervalId = setInterval(() => {
+      countdown--;
 
-  // Start game
-  const startGame = async () => {
-    const crashPoint = 1.1 + Math.random() * 8.9;
+      if (countdown <= 0) {
+        clearInterval(currentGame.intervalId);
+        startGame();
+      } else {
+        currentGame.state.countdown = countdown;
+        broadcastGameState();
+      }
+    }, 1000);
+  };
 
-    const game = await storage.createGame({
-      crashPoint
-    });
+  // Start game
+  const startGame = async () => {
+    try {
+      const crashPoint = 1.1 + Math.random() * 8.9;
 
-    currentGame.gameId = game.id;
-    currentGame.startTime = Date.now();
-    currentGame.state = {
-      status: "done"
-    };
-  };
+      const game = await storage.createGame({
+        crashPoint
+      });
 
-  // ========== ROUTES ==========
+      currentGame.gameId = game.id;
+      currentGame.startTime = Date.now();
+      currentGame.state = {
+        status: "done"
+      };
+    } catch (error) {
+      console.error('Error starting game:', error);
+    }
+  };
 
-  // Register
-  app.post("/api/register", asyncHandler(async (req, res) => {
-    const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw parsed.error;
-    }
+  // ========== ROUTES ==========
 
-    const { phone, password } = parsed.data;
+  // Register
+  app.post("/api/register", asyncHandler(async (req, res) => {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw parsed.error;
+    }
 
-    const existingUser = await storage.getUserByPhone(phone);
-    if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
-    }
+    const { phone, password } = parsed.data;
 
-    const user = await storage.createUser({ phone, password });
+    const existingUser = await storage.getUserByPhone(phone);
+    if (existingUser) {
+      return sendError(res, 400, 'Registration failed', 'User with this phone number already exists');
+    }
 
-    req.session.userId = user.id;
+    const user = await storage.createUser({ phone, password });
 
-    res.status(201).json({
-      message: "Registration successful",
-      user: {
-        id: user.id,
-        phone: user.phone,
-      },
-    });
-  }));
+    req.session.userId = user.id;
 
-  // Login
-  app.post("/api/login", asyncHandler(async (req, res) => {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw parsed.error;
-    }
+    return sendSuccess(res, {
+      user: {
+        id: user.id,
+        phone: user.phone,
+      }
+    }, 'Registration successful');
+  }));
 
-    const { phone, password } = parsed.data;
+  // Login
+  app.post("/api/login", asyncHandler(async (req, res) => {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw parsed.error;
+    }
 
-    const user = await storage.getUserByPhone(phone);
+    const { phone, password } = parsed.data;
 
-    if (!user || user.password !== password) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    const user = await storage.getUserByPhone(phone);
 
-    req.session.userId = user.id;
+    if (!user || user.password !== password) {
+      return sendError(res, 401, 'Authentication failed', 'Invalid phone number or password');
+    }
 
-    res.status(200).json({
-      message: "Login successful",
-      user: {
-        id: user.id,
-        phone: user.phone,
-      },
-    });
-  }));
+    req.session.userId = user.id;
 
-  return httpServer;
-  }
+    return sendSuccess(res, {
+      user: {
+        id: user.id,
+        phone: user.phone,
+      }
+    }, 'Login successful');
+  }));
+
+  // Enhanced WebSocket connection handling
+  wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection');
     
+    // Send current game state immediately
+    try {
+      ws.send(JSON.stringify({
+        type: "gameState",
+        data: currentGame.state,
+        timestamp: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.error('Error sending initial game state:', error);
+    }
+
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        // Handle WebSocket messages here
+        console.log('Received WebSocket message:', message);
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  });
+
+  // Global error handler
+  app.use((error: any, req: Request, res: Response, next: Function) => {
+    console.error('Unhandled Error:', error);
+    
+    if (res.headersSent) {
+      return next(error);
+    }
+    
+    sendError(res, 500, 'Internal Server Error', 'An unexpected error occurred');
+  });
+
+  return httpServer;
+  }
