@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase"; // make sure this path matches your project
 import UserHeader from "@/components/user-header";
 import GameArea from "@/components/game-area";
 import BettingControls from "@/components/betting-controls";
@@ -8,22 +8,42 @@ import MobileNavigation from "@/components/mobile-navigation";
 import AuthModal from "@/components/auth-modal";
 
 export default function Home() {
-  const { user, isLoading } = useAuth();
-  const [authModal, setAuthModal] = useState({ isOpen: false, view: "login" as "login" | "register" | "forgot" });
+  const [authModal, setAuthModal] = useState({
+    isOpen: false,
+    view: "login" as "login" | "register" | "forgot"
+  });
+
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(data?.user || null);
+    };
+
+    getUser();
+
+    // Listen to auth changes (e.g., logout or login)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const openLoginModal = () => setAuthModal({ isOpen: true, view: "login" });
   const openRegisterModal = () => setAuthModal({ isOpen: true, view: "register" });
   const closeAuthModal = () => setAuthModal({ ...authModal, isOpen: false });
-
-  if (isLoading) {
-    return <div className="text-center py-10">Loading...</div>;
-  }
 
   return (
     <div className="min-h-screen bg-neutral">
       <UserHeader 
         openLoginModal={openLoginModal}
         openRegisterModal={openRegisterModal}
+        user={user}
       />
 
       <main className="max-w-7xl mx-auto p-4">
@@ -34,15 +54,11 @@ export default function Home() {
             <GameTabs />
           </>
         ) : (
-          <div className="text-center text-white space-y-4 py-10">
-            <p className="text-lg">Welcome to KM Aviator!</p>
+          <div className="text-center mt-20">
+            <h2 className="text-white text-xl mb-6">Welcome to KM Aviator!</h2>
             <div className="space-x-4">
-              <button onClick={openLoginModal} className="bg-primary text-white px-4 py-2 rounded">
-                Log In
-              </button>
-              <button onClick={openRegisterModal} className="bg-secondary text-white px-4 py-2 rounded">
-                Create Account
-              </button>
+              <button onClick={openLoginModal} className="bg-blue-600 px-4 py-2 rounded text-white">Log In</button>
+              <button onClick={openRegisterModal} className="bg-gray-500 px-4 py-2 rounded text-white">Create Account</button>
             </div>
           </div>
         )}
@@ -59,4 +75,3 @@ export default function Home() {
     </div>
   );
 }
-  
