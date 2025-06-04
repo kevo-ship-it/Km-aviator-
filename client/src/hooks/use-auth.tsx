@@ -30,14 +30,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoginPending, setIsLoginPending] = useState(false);
   const [isRegisterPending, setIsRegisterPending] = useState(false);
   const [isResetPending, setIsResetPending] = useState(false);
-  
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (res.ok) {
-          const user = await res.json();
-          setUser(user);
+        const res = await apiRequest("GET", "/api/auth/me");
+        if (res?.data?.user) {
+          setUser(res.data.user);
         }
       } catch (error) {
         console.error("Error checking auth:", error);
@@ -45,37 +44,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     };
-    
+
     checkAuth();
   }, []);
-  
+
   const login = async (data: LoginRequest) => {
     setIsLoginPending(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login", data);
-      const user = await res.json();
-      setUser(user);
+      if (res?.data?.user) {
+        setUser(res.data.user);
+      }
     } finally {
       setIsLoginPending(false);
     }
   };
-  
+
   const register = async (data: RegisterRequest) => {
     setIsRegisterPending(true);
     try {
       const res = await apiRequest("POST", "/api/auth/register", data);
-      const user = await res.json();
-      setUser(user);
+      if (res?.data?.user) {
+        setUser(res.data.user);
+      }
     } finally {
       setIsRegisterPending(false);
     }
   };
-  
+
   const logout = async () => {
     await apiRequest("POST", "/api/auth/logout");
     setUser(null);
   };
-  
+
   const resetPassword = async (data: ResetPasswordRequest) => {
     setIsResetPending(true);
     try {
@@ -84,19 +85,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsResetPending(false);
     }
   };
-  
+
   const refreshUser = async () => {
     try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (res.ok) {
-        const updatedUser = await res.json();
-        setUser(updatedUser);
+      const res = await apiRequest("GET", "/api/auth/me");
+      if (res?.data?.user) {
+        setUser(res.data.user);
       }
     } catch (error) {
       console.error("Error refreshing user:", error);
     }
   };
-  
+
   const value = {
     user,
     isLoading,
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetPassword,
     refreshUser
   };
-  
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -119,4 +119,5 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
-  }
+}
+  
