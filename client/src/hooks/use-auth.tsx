@@ -49,16 +49,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (data: LoginRequest) => {
-    setIsLoginPending(true);
-    try {
-      const res = await apiRequest("POST", "/api/auth/login", data);
-      if (res?.data?.user) {
-        setUser(res.data.user);
-      }
-    } finally {
-      setIsLoginPending(false);
+  setIsLoginPending(true);
+  try {
+    const res = await apiRequest("POST", "/api/auth/login", data);
+
+    if (res?.data?.user) {
+      setUser(res.data.user);
+      console.log("✅ Login successful:", res.data.user);
+      // Optionally navigate or show a success message
+    } else {
+      console.warn("⚠️ Login failed: No user data returned");
+      alert("Login failed: Invalid credentials");
     }
-  };
+  } catch (error: any) {
+    console.error("❌ Login error:", error?.message || error);
+    alert("Login failed: " + (error?.response?.data?.message || error.message || "Unknown error"));
+  } finally {
+    setIsLoginPending(false);
+  }
+};
+  
 
   const register = async (data: RegisterRequest) => {
     setIsRegisterPending(true);
