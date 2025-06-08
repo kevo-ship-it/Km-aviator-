@@ -17,13 +17,18 @@ export default function Home() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data, error } = await supabase.auth.getUser();
+      console.log("getUser result:", data, error);
+      if (error) {
+        alert("getUser error: " + error.message);
+      }
       setUser(data?.user || null);
     };
 
     getUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("Auth state changed:", session);
       setUser(session?.user || null);
     });
 
@@ -35,17 +40,6 @@ export default function Home() {
   const openLoginModal = () => setAuthModal({ isOpen: true, view: "login" });
   const openRegisterModal = () => setAuthModal({ isOpen: true, view: "register" });
   const closeAuthModal = () => setAuthModal({ ...authModal, isOpen: false });
-
-  const debugAuthMe = async () => {
-    try {
-      const res = await fetch("/api/auth/me");
-      const json = await res.json();
-      alert(JSON.stringify(json, null, 2)); // You can also use console.log(json);
-    } catch (err) {
-      alert("Error calling /api/auth/me");
-      console.error(err);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-neutral">
@@ -61,16 +55,6 @@ export default function Home() {
             <GameArea />
             <BettingControls />
             <GameTabs />
-
-            {/* Debug Button for Auth */}
-            <div className="mt-6">
-              <button 
-                onClick={debugAuthMe}
-                className="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded text-white"
-              >
-                Debug /api/auth/me
-              </button>
-            </div>
           </>
         ) : (
           <div className="text-center mt-20">
@@ -81,6 +65,11 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Debug output */}
+        <pre className="text-white text-xs mt-8">
+          Debug: {JSON.stringify(user, null, 2)}
+        </pre>
       </main>
 
       <MobileNavigation />
@@ -93,5 +82,5 @@ export default function Home() {
       />
     </div>
   );
-  }
-    
+                                             }
+        
