@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase"; // make sure this path matches your project
+import { supabase } from "@/lib/supabase";
 import UserHeader from "@/components/user-header";
 import GameArea from "@/components/game-area";
 import BettingControls from "@/components/betting-controls";
@@ -16,7 +16,6 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    // Check if user is logged in
     const getUser = async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data?.user || null);
@@ -24,7 +23,6 @@ export default function Home() {
 
     getUser();
 
-    // Listen to auth changes (e.g., logout or login)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
@@ -37,6 +35,17 @@ export default function Home() {
   const openLoginModal = () => setAuthModal({ isOpen: true, view: "login" });
   const openRegisterModal = () => setAuthModal({ isOpen: true, view: "register" });
   const closeAuthModal = () => setAuthModal({ ...authModal, isOpen: false });
+
+  const debugAuthMe = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const json = await res.json();
+      alert(JSON.stringify(json, null, 2)); // You can also use console.log(json);
+    } catch (err) {
+      alert("Error calling /api/auth/me");
+      console.error(err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-neutral">
@@ -52,6 +61,16 @@ export default function Home() {
             <GameArea />
             <BettingControls />
             <GameTabs />
+
+            {/* Debug Button for Auth */}
+            <div className="mt-6">
+              <button 
+                onClick={debugAuthMe}
+                className="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded text-white"
+              >
+                Debug /api/auth/me
+              </button>
+            </div>
           </>
         ) : (
           <div className="text-center mt-20">
@@ -74,4 +93,5 @@ export default function Home() {
       />
     </div>
   );
-}
+  }
+    
