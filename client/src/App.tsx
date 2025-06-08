@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { GameProvider } from "@/hooks/use-game";
 
-function Router() {
+function Router(): JSX.Element {
   return (
     <Switch>
       <Route path="/" component={Home} />
@@ -16,7 +16,7 @@ function Router() {
   );
 }
 
-function App() {
+function App(): JSX.Element {
   return (
     <AuthProvider>
       <GameProvider>
