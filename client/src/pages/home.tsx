@@ -17,23 +17,28 @@ export default function Home() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      console.log("getUser result:", data, error);
+      const {
+        data: { user },
+        error
+      } = await supabase.auth.getUser();
+
       if (error) {
-        alert("getUser error: " + error.message);
+        console.error("getUser error:", error.message);
       }
-      setUser(data?.user || null);
+
+      setUser(user || null);
     };
 
     getUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("Auth state changed:", session);
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
 
     return () => {
-      listener?.subscription?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -65,11 +70,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        {/* Debug output */}
-        <pre className="text-white text-xs mt-8">
-          Debug: {JSON.stringify(user, null, 2)}
-        </pre>
       </main>
 
       <MobileNavigation />
@@ -82,5 +82,4 @@ export default function Home() {
       />
     </div>
   );
-                                             }
-        
+                                            }
